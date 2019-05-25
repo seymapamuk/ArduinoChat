@@ -1,0 +1,66 @@
+#include <SPI.h>
+
+char buf [100];
+volatile byte pos;
+volatile boolean process_it;
+String str;
+volatile boolean send_it;
+volatile byte    send_pos;
+
+void setup (void)
+{
+  Serial.begin (115200);
+  SPCR |= bit (SPE);
+  pinMode(MISO, OUTPUT);
+   
+  pos = 0;
+  process_it = false;
+
+  SPI.attachInterrupt();
+
+}  // end of setup
+
+ISR (SPI_STC_vect)
+{
+  // receive
+  byte c = SPDR;
+  if (c)
+    if (!process_it) {
+      if (c == '\n') {
+        buf[pos] = 0; // make end of string
+        process_it = true; // foregnd owns buf now
+      }
+      else if (pos < (sizeof (buf) - 1)){
+        buf[pos] = c;
+        pos++;
+      }
+    }
+  // send
+  if (send_it) {
+    SPDR=str[send_pos];
+    send_pos++;
+    if (send_pos >= str.length()) send_it = false; // foregnd owns str now
+  }
+  else
+    SPDR=0; // nothing to send so send NULL
+      
+}  // end of interrupt routine
+
+void loop (void)
+{
+  if(Serial.available() > 0) 
+    if (!send_it) { 
+      str = "PC2: ";
+      str += Serial.readString(); 
+      Serial.println(str); //echo
+      send_pos = 0;
+      send_it = true; // interrupt owns str now
+    }
+  if (process_it) {
+    Serial.println("PC1: "+String(buf) );
+    buf[pos]=0;
+    pos = 0;
+    process_it = false; // interrupt owns buf now
+  }
+    
+}  // end of loop
