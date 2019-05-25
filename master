@@ -1,0 +1,34 @@
+#include <SPI.h> 
+
+void setup (void) 
+{ 
+  digitalWrite(SS, HIGH); 
+  SPI.begin (); 
+  SPI.setClockDivider(SPI_CLOCK_DIV8); 
+  Serial.begin(115200); 
+} 
+
+void loop (void) 
+{ 
+  String str;
+  if(Serial.available() > 0){ 
+    str = Serial.readString();
+    Serial.print("PC1: "+str); // echo
+  } 
+  digitalWrite(SS, LOW); // SS is pin 10
+  if (str.length()) {
+    for (int a=0 ; a < str.length() ;a++){
+      char b=SPI.transfer (str[a]);
+      delay(50);
+      if (b) Serial.print(b);  // display anything slave sends while transmitting
+    } 
+    str = "";
+  }          
+  else
+  { 
+    char b=SPI.transfer (0); // use NULL character to poll slave
+    if (b) Serial.print(b);  //   slave replies with NULL if it has nothing
+  }
+  digitalWrite(SS, HIGH); 
+  //delay (1000); 
+}
