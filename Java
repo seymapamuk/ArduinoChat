@@ -1,0 +1,206 @@
+import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.io.PrintWriter;
+import java.util.Scanner;
+
+import javax.swing.GroupLayout;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+import javax.swing.LayoutStyle;
+import javax.swing.WindowConstants;
+
+import com.fazecast.jSerialComm.*;;
+
+public class Source {
+	public static void main(String[] args) {
+		Screen s = new Screen();
+		s.setTitle("Arduino Chat");
+		s.setVisible(true);
+	}
+}
+	
+class Screen extends JFrame implements KeyListener, ActionListener{
+
+	JTextArea wtext, stext;
+	JButton sendb;
+	
+	JScrollPane jScrollPane1, jScrollPane2;
+	
+	JButton sendButton;
+	
+	SerialPort ports[] = SerialPort.getCommPorts();
+	SerialPort port;
+	int chosen;
+	
+	PrintWriter output;
+	
+	Screen(){
+		/*System.out.println("Select a port:");
+        int i = 0;
+        for(SerialPort port : ports) {
+                System.out.println(i++ + ". " + port.getSystemPortName());
+        }
+        Scanner s = new Scanner(System.in);
+        chosen = s.nextInt();*/
+		
+        JComboBox<String> portList = new JComboBox<String>();
+		JButton connectButton = new JButton("Connect");
+
+		for(int i = 0; i < ports.length; i++)
+			portList.addItem(ports[i].getSystemPortName());
+		
+		connectButton.addActionListener(new ActionListener(){
+			@Override public void actionPerformed(ActionEvent arg0) {
+				if(connectButton.getText().equals("Connect"))
+					port = SerialPort.getCommPort(portList.getSelectedItem().toString()); 
+					port.setComPortTimeouts(SerialPort.TIMEOUT_SCANNER, 0, 0);
+					port.setBaudRate(115200);
+					
+					Thread t = new Thread(){
+						public void run(){
+							while(true)
+								texting();
+						}
+					};
+					
+					t.start();
+				} 	
+			});
+        
+        //port = ports[chosen];
+        
+		jScrollPane1 = new JScrollPane();
+	    wtext = new JTextArea();
+	    jScrollPane2 = new JScrollPane();
+	    stext = new JTextArea();
+	    sendButton = new JButton();
+
+	    setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
+
+	    wtext.setBackground(new Color(153, 204, 255));
+	    wtext.setColumns(20);
+	    wtext.setRows(5);
+	    jScrollPane1.setViewportView(wtext);
+
+	    stext.setEditable(false);
+	    stext.setBackground(new Color(153, 153, 255));
+	    stext.setColumns(20);
+	    stext.setLineWrap(true);
+	    stext.setRows(5);
+	    stext.setWrapStyleWord(true);
+	    stext.setCursor(new Cursor(Cursor.TEXT_CURSOR));
+	    stext.setSelectedTextColor(new Color(51, 51, 255));
+	    jScrollPane2.setViewportView(stext);
+
+	    sendButton.setText("SEND");
+	    sendButton.addActionListener(this);
+	    
+	    GroupLayout layout = new GroupLayout(getContentPane());
+	    getContentPane().setLayout(layout);
+	    layout.setHorizontalGroup(
+	    layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+	          .addGroup(layout.createSequentialGroup()
+	          .addContainerGap()
+	          .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+	              .addComponent(jScrollPane2, GroupLayout.Alignment.TRAILING)
+	              .addGroup(layout.createSequentialGroup()
+	                  .addComponent(jScrollPane1, GroupLayout.PREFERRED_SIZE, 385, GroupLayout.PREFERRED_SIZE)
+	                  .addPreferredGap(LayoutStyle.ComponentPlacement.RELATED)
+	                  .addComponent(sendButton, GroupLayout.DEFAULT_SIZE, 84, Short.MAX_VALUE))
+	              .addGroup(layout.createSequentialGroup()
+	                        .addComponent(portList, javax.swing.GroupLayout.PREFERRED_SIZE, 197, javax.swing.GroupLayout.PREFERRED_SIZE)
+	                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+	                        .addComponent(connectButton)
+	                        .addGap(0, 0, Short.MAX_VALUE)))
+	               .addContainerGap())
+	        );
+	    layout.setVerticalGroup(
+	    layout.createParallelGroup(GroupLayout.Alignment.LEADING)
+	          .addGroup(layout.createSequentialGroup()
+	          .addContainerGap()
+	          .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+	                    .addComponent(portList, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+	                    .addComponent(connectButton))
+	              .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+	              .addComponent(jScrollPane2, GroupLayout.DEFAULT_SIZE, 245, Short.MAX_VALUE)
+	              .addGap(18, 18, 18)
+	              .addGroup(layout.createParallelGroup(GroupLayout.Alignment.LEADING, false)
+	                    .addComponent(jScrollPane1)
+	                    .addComponent(sendButton, GroupLayout.DEFAULT_SIZE, GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+	                .addContainerGap())
+	        );
+
+	    pack();
+	     
+	    setFocusable(true);
+	    addKeyListener(this);
+	    wtext.addKeyListener(this);
+	}
+	
+	public void texting(){	
+		String received;
+		
+		if(port.openPort()){
+			Scanner data = new Scanner(port.getInputStream());
+			
+			while(data.hasNextLine()){
+				received = data.nextLine();
+				received = received.replaceAll("ğ", "");
+								
+				stext.append(received + "\n");
+			}
+		}
+		else
+			port.closePort();
+	}
+	
+	@Override
+	public void keyPressed(KeyEvent arg0) {
+		
+		if(arg0.getKeyCode() == KeyEvent.VK_ENTER){
+			String sending = wtext.getText();
+			ArduinoSend(sending);
+			wtext.setText("");
+			arg0.consume();
+		}
+	}
+	
+	public void ArduinoSend(String s){
+		if(port.openPort()){	
+			Thread thread = new Thread(){
+				@Override public void run(){
+				output = new PrintWriter(port.getOutputStream());
+				output.print(s + '\n');
+				output.flush();
+				}
+				};
+				thread.start();
+		}
+		else
+			port.closePort();
+	}
+
+	@Override
+	public void keyReleased(KeyEvent arg0) {
+		// TODO Auto-generated method stub
+	}
+	@Override
+	public void keyTyped(KeyEvent arg0) {
+		// TODO Auto-generated method stub	
+	}
+
+	@Override
+	public void actionPerformed(ActionEvent arg0) {
+		String sending = wtext.getText();
+		wtext.setText("");
+		ArduinoSend(sending);
+	}
+		
+	}
